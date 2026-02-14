@@ -120,3 +120,36 @@ class LogoutEndpointTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("detail", response.data)
 
+
+class ExamTypeListEndpointTests(APITestCase):
+    def setUp(self):
+        self.url = "/users/exam-types/"
+
+    def test_list_returns_200_and_exam_types(self):
+        ExamType.objects.create(name="9th Grade", slug="9th-grade", order=1, is_active=True)
+        ExamType.objects.create(name="12th Grade", slug="12th-grade", order=2, is_active=True)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(response.data, list)
+        self.assertEqual(len(response.data), 2)
+        by_name = {item["name"]: item for item in response.data}
+        self.assertIn("9th Grade", by_name)
+        self.assertIn("12th Grade", by_name)
+        for item in response.data:
+            self.assertIn("id", item)
+            self.assertIn("name", item)
+            self.assertIn("slug", item)
+            self.assertIn("order", item)
+        self.assertEqual(by_name["9th Grade"]["slug"], "9th-grade")
+        self.assertEqual(by_name["9th Grade"]["order"], 1)
+        self.assertEqual(by_name["12th Grade"]["slug"], "12th-grade")
+        self.assertEqual(by_name["12th Grade"]["order"], 2)
+
+    
+    def test_list_returns_only_active_exam_types(self):
+        ExamType.objects.create(name="Active", slug="active", order=1, is_active=True)
+        ExamType.objects.create(name="Inactive", slug="inactive", order=2, is_active=False)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["name"], "Active")

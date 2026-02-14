@@ -67,3 +67,9 @@ class RegisterSerializer(serializers.Serializer):
             phone=phone,
         )
         return user
+
+
+class ExamTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ExamType
+        fields = "__all__"
