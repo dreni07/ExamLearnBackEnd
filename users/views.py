@@ -9,9 +9,12 @@ from .serializers import LoginSerializer,RegisterSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import ExamType
 from rest_framework.generics import ListAPIView
-from .serializers import ExamTypeSerializer, LoginSerializer, RegisterSerializer
-
-
+from .serializers import (
+    ExamTypeSerializer, 
+    LoginSerializer, 
+    RegisterSerializer,
+    GoogleAuthSerializer
+)
 # Create your views here.
 
 def get_tokens_for_user(user):
@@ -33,7 +36,11 @@ class LoginView(APIView):
         tokens = get_tokens_for_user(user)
         return Response({
             'access': tokens['access'],
-            'refresh': tokens['refresh']
+            'refresh': tokens['refresh'],
+            'user': {
+                'id': user.id,
+                'email': user.email,
+            },
         }, status=status.HTTP_200_OK)
 
 class LogoutView(APIView):
@@ -89,8 +96,32 @@ class RegisterView(APIView):
             status=status.HTTP_201_CREATED,
         )
 
+
+class GoogleAuthView(APIView):
+    permission_classes = []
+    authentication_classes = []
+
+    def post(self,request):
+        serializer = GoogleAuthSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.validated_data["user"]
+        tokens = get_tokens_for_user(user)
+
+        return Response(
+            {
+                "access": tokens["access"],
+                "refresh": tokens["refresh"],
+                "user": {
+                    "id": user.id,
+                    "email": user.email
+                }
+            },
+            status=status.HTTP_200_OK
+        )
+
 class ExamTypeListView(ListAPIView):
     queryset = ExamType.objects.filter(is_active=True).order_by("order","name")
     serializer_class = ExamTypeSerializer
     permission_classes = []
     authentication_classes = []
+

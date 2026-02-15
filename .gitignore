@@ -11,7 +11,7 @@
 /venv/Scripts/Activate.ps1
 /env/Scripts/Activate.ps1
 /venv/Scripts/Activate.bat
-
+.env
 __pycache__/
 *.py[cod]
 *$py.class

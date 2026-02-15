@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 from datetime import timedelta
 
@@ -43,9 +44,18 @@ INSTALLED_APPS = [
     'corsheaders',
     'users',
     'rest_framework_simplejwt',
-    'rest_framework_simplejwt.token_blacklist',    
+    'rest_framework_simplejwt.token_blacklist', 
+    'rest_framework.authtoken',
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'allauth.socialaccount.providers.google',
+    'dj_rest_auth',
+    'dj_rest_auth.registration',   
 ]
 
+
+SITE_ID = 1
 
 
 MIDDLEWARE = [
@@ -125,6 +135,9 @@ USE_TZ = True
 
 AUTH_USER_MODEL = 'users.User'
 
+GOOGLE_OAUTH2_CLIENT_ID = os.environ.get('GOOGLE_OAUTH2_CLIENT_ID','')
+
+
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
@@ -158,3 +171,9 @@ SIMPLE_JWT = {
     'USER_ID_FIELD': 'id',
     'USER_ID_CLAIM': 'user_id'
 }
+
+
+AUTHENTICATION_BACKENDS = (
+    'django.contrib.auth.backends.ModelBackend',
+    'allauth.account.auth_backends.AuthenticationBackend'
+)

@@ -73,3 +73,50 @@ class ExamTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = ExamType
         fields = "__all__"
+
+class GoogleAuthSerializer(serializers.Serializer):
+    id_token = serializers.CharField(write_only=True)
+
+    def validate(self,attrs):
+        id_token = attrs.get('id_token')
+        if not id_token:
+            raise serializers.ValidationError("id_token is required")
+
+        client_id = getattr(settings, 'GOOGLE_OAUTH2_CLIENT_ID',None)
+        if not client_id:
+            raise serializers.ValidationError("Google OAuth is not configured")
+
+        try:
+            payload = id_token.verify_oauth2_token(
+                id_token_str,
+                google_requests.Request(),
+                client_id
+            )
+
+        except ValueError as e:
+            raise serializers.ValidationError("Invalid or expired Google Token")
+        
+        email = (payload.get("email") or "").lower().strip()
+        if not email:
+            raise serializers.ValidationError("Invalid Google Token: No email found")
+        name = (payload.get("name") or "").strip()
+
+        user,created = User.objects.get_or_create(
+            email=email,
+            defaults={"email":email}
+        )
+
+        if created:
+            user.set_unusable_password()
+            user.save()
+            UserProfile.objects.get_or_create(
+                user=user,
+                defaults={"full_name":name}
+            )
+
+        if not user.is_active:
+            raise serializers.ValidationError("User is not active")
+
+        attrs["user"] = user
+        
+        return attrs
