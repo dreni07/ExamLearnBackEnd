@@ -1,46 +1,44 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import ExamType,UserProfile
+from django.conf import settings
+
+from .models import ExamType, UserProfile
+from .services import create_verification_code, verify_code
+from .email import send_verification_email
 
 User = get_user_model()
+
 
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField(write_only=True)
     password = serializers.CharField(write_only=True)
 
-    def validate(self,attrs):
+    def validate(self, attrs):
         email = attrs.get('email')
         password = attrs.get('password')
 
         if not email or not password:
             raise serializers.ValidationError("Email and password are required")
 
-        user = User.objects.filter(email=email).first()
+        user = User.objects.filter(email__iexact=email).first()
 
         if not user or not user.check_password(password):
             raise serializers.ValidationError("Invalid credentials")
 
-        if not user.is_active:
-            raise serializers.ValidationError("User is not active")
-
         attrs['user'] = user
-        
+        attrs['requires_verification'] = not user.is_active
         return attrs
+
 
 class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField(write_only=True)
-    password = serializers.CharField(write_only=True,min_length=8,style={"input_type":"password"})
+    password = serializers.CharField(write_only=True, min_length=8, style={"input_type": "password"})
 
-    full_name = serializers.CharField(max_length=255,required=False,allow_blank=True)
-    exam_type_id = serializers.PrimaryKeyRelatedField(
-        queryset=ExamType.objects.filter(is_active=True),
-        required=True,
-    )
-
+    full_name = serializers.CharField(max_length=255, required=False, allow_blank=True)
     exam_year = serializers.IntegerField(required=False, allow_null=True, min_value=2000, max_value=2100)
     phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
 
-    def validate_email(self,value):
+    def validate_email(self, value):
         if User.objects.filter(email__iexact=value).exists():
             raise serializers.ValidationError("A user with this email already exists")
         return value.lower()
@@ -50,22 +48,93 @@ class RegisterSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         password = validated_data.pop("password")
-        exam_type = validated_data.pop("exam_type_id")
         full_name = validated_data.get("full_name", "")
         exam_year = validated_data.pop("exam_year", None)
         phone = validated_data.pop("phone", "")
 
+        # User stays inactive until they pick exam and verify email
         user = User.objects.create_user(
             email=validated_data["email"],
             password=password,
+            is_active=False,
         )
         UserProfile.objects.create(
             user=user,
-            exam_type=exam_type,
+            exam_type=None,
             full_name=full_name,
             exam_year=exam_year,
             phone=phone,
         )
+        return user
+
+
+class PickExamSerializer(serializers.Serializer):
+    """Step 2 of signup: saves exam type and sends verification code."""
+    email = serializers.EmailField(write_only=True)
+    exam_type_id = serializers.PrimaryKeyRelatedField(
+        queryset=ExamType.objects.filter(is_active=True),
+        required=True,
+    )
+
+    def validate_email(self, value):
+        user = User.objects.filter(email__iexact=value).first()
+        if not user:
+            raise serializers.ValidationError("No account found with this email.")
+        if user.is_active:
+            raise serializers.ValidationError("This account is already verified.")
+        return value.lower()
+
+    def save(self, **kwargs):
+        user = User.objects.get(email__iexact=self.validated_data["email"])
+        exam_type = self.validated_data["exam_type_id"]
+        profile = user.profile
+        profile.exam_type = exam_type
+        profile.save(update_fields=["exam_type"])
+        code = create_verification_code(user)
+        send_verification_email(user.email, code)
+        return user
+
+
+class VerifyEmailSerializer(serializers.Serializer):
+    email = serializers.EmailField(write_only=True)
+    code = serializers.CharField(write_only=True, min_length=4, max_length=10)
+
+    def validate_email(self, value):
+        user = User.objects.filter(email__iexact=value).first()
+        if not user:
+            raise serializers.ValidationError("No account found with this email.")
+        if user.is_active:
+            raise serializers.ValidationError("This account is already verified.")
+        return value.lower()
+
+    def validate(self, attrs):
+        email = attrs['email']
+        code = attrs['code']
+        user = User.objects.get(email__iexact=email)
+
+        success, error_msg = verify_code(user, code)
+        if not success:
+            raise serializers.ValidationError({"code": error_msg})
+
+        attrs['user'] = user
+        return attrs
+
+
+class ResendCodeSerializer(serializers.Serializer):
+    email = serializers.EmailField(write_only=True)
+
+    def validate_email(self, value):
+        user = User.objects.filter(email__iexact=value).first()
+        if not user:
+            raise serializers.ValidationError("No account found with this email.")
+        if user.is_active:
+            raise serializers.ValidationError("This account is already verified. You can log in.")
+        return value.lower()
+
+    def save(self, **kwargs):
+        user = User.objects.get(email__iexact=self.validated_data['email'])
+        code = create_verification_code(user)
+        send_verification_email(user.email, code)
         return user
 
 
@@ -74,15 +143,19 @@ class ExamTypeSerializer(serializers.ModelSerializer):
         model = ExamType
         fields = "__all__"
 
+
 class GoogleAuthSerializer(serializers.Serializer):
     id_token = serializers.CharField(write_only=True)
 
-    def validate(self,attrs):
-        id_token = attrs.get('id_token')
-        if not id_token:
+    def validate(self, attrs):
+        from google.oauth2 import id_token
+        from google.auth.transport import requests as google_requests
+
+        id_token_str = attrs.get('id_token')
+        if not id_token_str:
             raise serializers.ValidationError("id_token is required")
 
-        client_id = getattr(settings, 'GOOGLE_OAUTH2_CLIENT_ID',None)
+        client_id = getattr(settings, 'GOOGLE_OAUTH2_CLIENT_ID', None)
         if not client_id:
             raise serializers.ValidationError("Google OAuth is not configured")
 
@@ -92,18 +165,17 @@ class GoogleAuthSerializer(serializers.Serializer):
                 google_requests.Request(),
                 client_id
             )
-
-        except ValueError as e:
+        except ValueError:
             raise serializers.ValidationError("Invalid or expired Google Token")
-        
+
         email = (payload.get("email") or "").lower().strip()
         if not email:
             raise serializers.ValidationError("Invalid Google Token: No email found")
         name = (payload.get("name") or "").strip()
 
-        user,created = User.objects.get_or_create(
+        user, created = User.objects.get_or_create(
             email=email,
-            defaults={"email":email}
+            defaults={"email": email}
         )
 
         if created:
@@ -111,12 +183,11 @@ class GoogleAuthSerializer(serializers.Serializer):
             user.save()
             UserProfile.objects.get_or_create(
                 user=user,
-                defaults={"full_name":name}
+                defaults={"full_name": name}
             )
 
         if not user.is_active:
             raise serializers.ValidationError("User is not active")
 
         attrs["user"] = user
-        
         return attrs

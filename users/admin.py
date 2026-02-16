@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, ExamType, UserProfile
+from .models import User, ExamType, UserProfile,EmailVerificationCode
 # Register your models here.
 
 @admin.register(User)
@@ -32,3 +32,10 @@ class UserProfileAdmin(admin.ModelAdmin):
     search_fields = ("user__email", "full_name", "phone")
     raw_id_fields = ("user",)
     autocomplete_fields = ("exam_type",)
+
+@admin.register(EmailVerificationCode)
+class EmailVerificationCodeAdmin(admin.ModelAdmin):
+    list_display = ('user','code','created_at')
+    list_filter = ('created_at',)
+    search_fields = ('user__email',)
+    raw_id_fields = ('user',)
