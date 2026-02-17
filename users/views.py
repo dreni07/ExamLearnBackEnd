@@ -14,6 +14,8 @@ from .serializers import (
     GoogleAuthSerializer,
     VerifyEmailSerializer,
     ResendCodeSerializer,
+    RequestPasswordChangeSerializer,
+    ConfirmPasswordChangeSerializer,
 )
 
 
@@ -194,3 +196,35 @@ class ExamTypeListView(ListAPIView):
     serializer_class = ExamTypeSerializer
     permission_classes = []
     authentication_classes = []
+
+class RequestPasswordChangeView(APIView):
+    permission_classes = []
+    authentication_classes = []
+
+    def post(self,request):
+        serializer = RequestPasswordChangeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        
+        return Response(
+            {
+                "message": "A verification code has been sent to your email.",
+                "user_id": user.id
+            },
+            status=status.HTTP_200_OK
+        )
+
+class ConfirmPasswordChangeView(APIView):
+    permission_classes = []
+    authentication_classes = []
+
+    def post(self,request):
+        serializer = ConfirmPasswordChangeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        return Response(
+            {
+                "message": "Password changed successfully."
+            },
+            status=status.HTTP_200_OK
+        )

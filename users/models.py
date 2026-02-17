@@ -113,3 +113,23 @@ class EmailVerificationCode(models.Model):
     
     def __str__(self):
         return f"Code for {self.user.email}"
+
+class PasswordResetCode(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='password_reset_codes'
+    )
+
+    code = models.CharField(max_length=10)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'users_password_reset_code'
+        verbose_name = "Password Reset Code"
+        verbose_name_plural = "Password Reset Codes"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Password reset code for {self.user.email}"
+    

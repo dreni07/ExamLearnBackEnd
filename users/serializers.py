@@ -3,8 +3,15 @@ from django.contrib.auth import get_user_model
 from django.conf import settings
 
 from .models import ExamType, UserProfile
-from .services import create_verification_code, verify_code
-from .email import send_verification_email
+
+from .services import  (
+    create_verification_code,
+    verify_code,
+    create_password_change_code,
+    verify_and_apply_password_change
+)
+
+from .email import send_verification_email, send_password_change_code_email
 
 User = get_user_model()
 
@@ -190,4 +197,41 @@ class GoogleAuthSerializer(serializers.Serializer):
             raise serializers.ValidationError("User is not active")
 
         attrs["user"] = user
+        return attrs
+
+
+class RequestPasswordChangeSerializer(serializers.Serializer):
+    email = serializers.EmailField(write_only=True)
+
+    def validate_email(self, value):
+        user = User.objects.filter(email__iexact=value).first()
+        if not user:
+            raise serializers.ValidationError("No account found with this email.")
+        return value.lower()
+
+    def save(self, **kwargs):
+        user = User.objects.get(email__iexact=self.validated_data["email"])
+        code = create_password_change_code(user)
+        send_password_change_code_email(user.email, code)
+        return user
+
+
+class ConfirmPasswordChangeSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField(write_only=True)
+    code = serializers.CharField(write_only=True, min_length=4, max_length=10)
+    new_password = serializers.CharField(
+        write_only=True, min_length=8, style={"input_type": "password"}
+    )
+
+    def validate(self, attrs):
+        user_id = attrs["user_id"]
+        code = attrs["code"]
+        new_password = attrs["new_password"]
+
+        success, error_msg = verify_and_apply_password_change(
+            user_id, code, new_password
+        )
+        if not success:
+            raise serializers.ValidationError({"code": error_msg})
+
         return attrs
