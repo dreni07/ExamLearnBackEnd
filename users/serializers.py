@@ -261,3 +261,42 @@ class ConfirmPasswordChangeSerializer(serializers.Serializer):
             raise serializers.ValidationError({"code": error_msg})
 
         return attrs
+
+class UpdateUserExamTargetDateSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField(write_only=True)
+    target_exam_date = serializers.DateField(write_only=True)
+
+    def validate_user_id(self, value):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            raise serializers.ValidationError("Authentication required.")
+        if value != request.user.id:
+            raise serializers.ValidationError("You can only update your own exam target")
+        return value
+
+    def validate(self, attrs):
+        user_id = attrs['user_id']
+
+        try:
+            user_exam = UserExam.objects.get(user_id=user_id)
+        except UserExam.DoesNotExist:
+            raise serializers.ValidationError(
+                {
+                    "user_id": "No UserExam found for this user.Please select an exam type first."
+                }
+            )
+
+        attrs['user_exam'] = user_exam
+        
+        return attrs
+
+    def save(self,**kwargs):
+        user_exam = self.validated_data["user_exam"]
+        user_exam.target_exam_date = self.validated_data["target_exam_date"]
+        user_exam.save(update_fields=["target_exam_date"])
+        return user_exam
+
+class UserExamSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserExam
+        fields = "__all__"

@@ -1,4 +1,4 @@
-from rest_framework import status
+from rest_framework import status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -16,6 +16,8 @@ from .serializers import (
     ResendCodeSerializer,
     RequestPasswordChangeSerializer,
     ConfirmPasswordChangeSerializer,
+    UpdateUserExamTargetDateSerializer,
+    UserExamSerializer,
 )
 
 
@@ -238,5 +240,22 @@ class ConfirmPasswordChangeView(APIView):
             {
                 "message": "Password changed successfully."
             },
+            status=status.HTTP_200_OK
+        )
+
+class UpdateUserExamTargetDateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self,request):
+        serializer = UpdateUserExamTargetDateSerializer(
+            data=request.data,
+            context={"request":request},
+        )
+
+        serializer.is_valid(raise_exception=True)
+        user_exam = serializer.save()
+
+        return Response(
+            UserExamSerializer(user_exam).data,
             status=status.HTTP_200_OK
         )

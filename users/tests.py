@@ -337,3 +337,41 @@ class ExamTypeDetailEndpointTests(APITestCase):
         )
         response = self.client.get(f"/users/exam-types/{inactive.id}/")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+class UpdateUserExamTargetDateEndpointTests(APITestCase):
+    def setUp(self):
+        self.exam_type = ExamType.objects.create(
+            name="12th Grade",
+            slug="12th-grade",
+            order=1,
+            is_active=True
+        )
+
+        self.user = User.objects.create_user(
+            email="target@example.com", password="pass123", is_active=True
+        )
+
+        UserProfile.objects.create(user=self.user, exam_type=self.exam_type)
+        self.user_exam = UserExam.objects.create(
+            user=self.user, exam_type=self.exam_type
+        )
+        self.url = "/users/user-exam/update-target-date/"
+        self.client.force_authenticate(user=self.user)
+
+    def test_update_target_date_success(self):
+        payload = {
+            "user_id": self.user.id,
+            "target_exam_date": "2026-03-01"
+        }
+
+        response = self.client.patch(self.url,payload,format="json")
+        self.assertEqual(response.status_code,status.HTTP_200_OK)
+        self.assertEqual(response.data["target_exam_date"],"2026-03-01")
+        self.user_exam.refresh_from_db()
+        self.assertEqual(str(self.user_exam.target_exam_date),"2026-03-01")
+
+    def test_update_target_date_unauthenticated_returns_401(self):
+        self.client.force_authenticate(user=None)
+        payload = {"user_id": self.user.id, "target_exam_date": "2026-06-15"}
+        response = self.client.patch(self.url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
