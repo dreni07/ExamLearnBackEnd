@@ -304,3 +304,36 @@ class ExamTypeListEndpointTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["name"], "Active")
+
+class ExamTypeDetailEndpointTests(APITestCase):
+    def setUp(self):
+        self.exam_type = ExamType.objects.create(
+            name="12th Grade",
+            slug="12th-grade",
+            order=1,
+            is_active=True
+        )
+        self.url = f"/users/exam-types/{self.exam_type.id}/"
+
+    def test_detail_returns_200_and_exam_type(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["name"], "12th Grade")
+        self.assertEqual(response.data["slug"], "12th-grade")
+        self.assertEqual(response.data["order"], 1)
+        self.assertEqual(response.data["is_active"], True)
+
+    
+    def test_detail_nonexistent_id_returns_404(self):
+        response = self.client.get("/users/exam-types/99999/")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_detail_inactive_exam_type_returns_404(self):
+        inactive = ExamType.objects.create(
+            name="Inactive Exam",
+            slug="inactive-exam",
+            order=2,
+            is_active=False
+        )
+        response = self.client.get(f"/users/exam-types/{inactive.id}/")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

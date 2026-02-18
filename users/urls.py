@@ -12,6 +12,7 @@ urlpatterns = [
     path('auth/logout/', views.LogoutView.as_view()),
     path('auth/google/', views.GoogleAuthView.as_view()),
     path('exam-types/', views.ExamTypeListView.as_view()),
+    path('exam-types/<int:pk>/', views.ExamTypeDetailView.as_view()),
 
     path('auth/request-password-change/', views.RequestPasswordChangeView.as_view()),
     path('auth/confirm-password-change/', views.ConfirmPasswordChangeView.as_view()),

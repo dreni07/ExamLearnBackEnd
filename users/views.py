@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
-from rest_framework.generics import ListAPIView
+from rest_framework.generics import ListAPIView, RetrieveAPIView
 
 from .models import ExamType
 from .serializers import (
@@ -24,6 +24,19 @@ def get_tokens_for_user(user):
     return {
         'refresh': str(refresh),
         'access': str(refresh.access_token)
+    }
+
+
+def get_user_response_data(user):
+    exam_type_id = None
+    try:
+        exam_type_id = user.profile.exam_type_id
+    except Exception:
+        pass
+    return {
+        "id": user.id,
+        "email": user.email,
+        "exam_type_id": exam_type_id,
     }
 
 
@@ -53,14 +66,11 @@ class LoginView(APIView):
             )
 
         tokens = get_tokens_for_user(user)
-        
+
         return Response({
             'access': tokens['access'],
             'refresh': tokens['refresh'],
-            'user': {
-                'id': user.id,
-                'email': user.email,
-            },
+            'user': get_user_response_data(user),
             'email_verified': True,
             'requires_verification': False,
         }, status=status.HTTP_200_OK)
@@ -144,10 +154,7 @@ class VerifyEmailView(APIView):
             {
                 "access": tokens["access"],
                 "refresh": tokens["refresh"],
-                "user": {
-                    "id": user.id,
-                    "email": user.email,
-                },
+                "user": get_user_response_data(user),
                 "email_verified": True,
                 "requires_verification": False,
             },
@@ -182,10 +189,7 @@ class GoogleAuthView(APIView):
             {
                 "access": tokens["access"],
                 "refresh": tokens["refresh"],
-                "user": {
-                    "id": user.id,
-                    "email": user.email
-                }
+                "user": get_user_response_data(user),
             },
             status=status.HTTP_200_OK
         )
@@ -196,6 +200,14 @@ class ExamTypeListView(ListAPIView):
     serializer_class = ExamTypeSerializer
     permission_classes = []
     authentication_classes = []
+
+
+class ExamTypeDetailView(RetrieveAPIView):
+    queryset = ExamType.objects.filter(is_active=True)
+    serializer_class = ExamTypeSerializer
+    permission_classes = []
+    authentication_classes = []
+
 
 class RequestPasswordChangeView(APIView):
     permission_classes = []

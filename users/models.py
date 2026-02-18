@@ -132,4 +132,31 @@ class PasswordResetCode(models.Model):
 
     def __str__(self):
         return f"Password reset code for {self.user.email}"
+
+
+class UserExam(models.Model):
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name="user_exam"
+    )
+
+    exam_type = models.ForeignKey(
+        ExamType,
+        on_delete=models.CASCADE,
+        related_name="user_exams"
+    )
+
+    target_exam_date = models.DateField(null=True,blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "users_user_exam"
+        verbose_name = "User Exam"
+        verbose_name_plural = "User Exams"
+
+    def __str__(self):
+        return f"{self.user.email} - {self.exam_type.name}"
     

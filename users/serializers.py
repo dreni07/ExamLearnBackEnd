@@ -2,7 +2,11 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.conf import settings
 
-from .models import ExamType, UserProfile
+from .models import (
+    ExamType,
+    UserProfile,
+    UserExam
+)
 
 from .services import  (
     create_verification_code,
@@ -76,29 +80,51 @@ class RegisterSerializer(serializers.Serializer):
 
 
 class PickExamSerializer(serializers.Serializer):
-    """Step 2 of signup: saves exam type and sends verification code."""
-    email = serializers.EmailField(write_only=True)
+    email = serializers.EmailField(write_only=True, required=False, allow_blank=True)
     exam_type_id = serializers.PrimaryKeyRelatedField(
         queryset=ExamType.objects.filter(is_active=True),
         required=True,
     )
 
-    def validate_email(self, value):
-        user = User.objects.filter(email__iexact=value).first()
-        if not user:
-            raise serializers.ValidationError("No account found with this email.")
-        if user.is_active:
-            raise serializers.ValidationError("This account is already verified.")
-        return value.lower()
+    def validate(self, attrs):
+        request = self.context.get("request")
+        email = attrs.get("email")
+        if request and request.user.is_authenticated:
+            attrs["user"] = request.user
+            attrs["is_authenticated"] = True
+        else:
+            if not email:
+                raise serializers.ValidationError({"email": "Email is required when not authenticated."})
+
+            user = User.objects.filter(email__iexact=email).first()
+
+            if not user:
+                raise serializers.ValidationError({"email": "No account found with this email."})
+            if user.is_active:
+                raise serializers.ValidationError({"email": "This account is already verified."})
+
+            attrs["user"] = user  
+            attrs["is_authenticated"] = False
+        return attrs
 
     def save(self, **kwargs):
-        user = User.objects.get(email__iexact=self.validated_data["email"])
+        user = self.validated_data["user"]
         exam_type = self.validated_data["exam_type_id"]
+        is_authenticated = self.validated_data["is_authenticated"]
+
         profile = user.profile
         profile.exam_type = exam_type
         profile.save(update_fields=["exam_type"])
-        code = create_verification_code(user)
-        send_verification_email(user.email, code)
+
+        UserExam.objects.update_or_create(
+            user=user,
+            defaults={"exam_type": exam_type},
+        )
+
+        if not is_authenticated:
+            code = create_verification_code(user)
+            send_verification_email(user.email, code)
+
         return user
 
 
